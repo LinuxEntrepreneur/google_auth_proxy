@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -24,7 +25,8 @@ func main() {
 	config := flagSet.String("config", "", "path to config file")
 	showVersion := flagSet.Bool("version", false, "print version string")
 
-	flagSet.String("http-address", "127.0.0.1:4180", "<addr>:<port> to listen on for HTTP clients")
+	flagSet.String("http-address", "127.0.0.1:4180", "<addr>:<port> to listen on for HTTP clients (equivalent to -listen http://<addr>:<port>)")
+	flagSet.String("listen", "", "<schema>://<addr>:<port> to listen on for HTTP clients, where schema is one of: \"http\", \"tcp\", \"tcp4\", \"tcp6\", \"unix\" or \"unixpacket\"")
 	flagSet.String("redirect-url", "", "the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\"")
 	flagSet.Var(&upstreams, "upstream", "the http url(s) of the upstream endpoint. If multiple, routing is based on path")
 	flagSet.Bool("pass-basic-auth", true, "pass HTTP Basic Auth, X-Forwarded-User and X-Forwarded-Email information to upstream")
@@ -88,11 +90,24 @@ func main() {
 		}
 	}
 
-	listener, err := net.Listen("tcp", opts.HttpAddress)
+	u, err := url.Parse(opts.listen)
 	if err != nil {
-		log.Fatalf("FATAL: listen (%s) failed - %s", opts.HttpAddress, err)
+		log.Fatalf("FATAL: error parsing URL: %v", err)
 	}
-	log.Printf("listening on %s", opts.HttpAddress)
+
+	var listenType string
+	if u.Scheme == "http" {
+		listenType = "tcp"
+	} else {
+		listenType = u.Scheme
+	}
+	listenAddr := strings.TrimPrefix(u.String(), u.Scheme+"://")
+
+	listener, err := net.Listen(listenType, listenAddr)
+	if err != nil {
+		log.Fatalf("FATAL: listen (%s, %s) failed - %s", listenType, listenAddr, err)
+	}
+	log.Printf("listening on %s", u)
 
 	server := &http.Server{Handler: oauthproxy}
 	err = server.Serve(listener)

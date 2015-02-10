@@ -11,6 +11,7 @@ import (
 // Configuration Options that can be set by Command Line Flag, or Config File
 type Options struct {
 	HttpAddress             string        `flag:"http-address" cfg:"http_address"`
+	Listen                  string        `flag:"listen" cfg:"listen"`
 	RedirectUrl             string        `flag:"redirect-url" cfg:"redirect_url"`
 	ClientID                string        `flag:"client-id" cfg:"client_id" env:"GOOGLE_AUTH_PROXY_CLIENT_ID"`
 	ClientSecret            string        `flag:"client-secret" cfg:"client_secret" env:"GOOGLE_AUTH_PROXY_CLIENT_SECRET"`
@@ -28,14 +29,16 @@ type Options struct {
 	SkipAuthRegex           []string      `flag:"skip-auth-regex" cfg:"skip_auth_regex"`
 
 	// internal values that are set after config validation
+	listen        string
 	redirectUrl   *url.URL
 	proxyUrls     []*url.URL
 	CompiledRegex []*regexp.Regexp
 }
 
+const defaultHttpAddress = "127.0.0.1:4180"
+
 func NewOptions() *Options {
 	return &Options{
-		HttpAddress:         "127.0.0.1:4180",
 		DisplayHtpasswdForm: true,
 		CookieHttpsOnly:     true,
 		CookieHttpOnly:      true,
@@ -56,6 +59,9 @@ func (o *Options) Validate() error {
 	}
 	if o.ClientSecret == "" {
 		return errors.New("missing setting: client-secret")
+	}
+	if o.HttpAddress != "" && o.Listen != "" {
+		return errors.New("both http-address and listen are set")
 	}
 
 	redirectUrl, err := url.Parse(o.RedirectUrl)
@@ -81,6 +87,15 @@ func (o *Options) Validate() error {
 			return fmt.Errorf("error compiling regex=%q %s", u, err)
 		}
 		o.CompiledRegex = append(o.CompiledRegex, CompiledRegex)
+	}
+
+	if o.Listen == "" {
+		if o.HttpAddress == "" {
+			o.HttpAddress = defaultHttpAddress
+		}
+		o.listen = "http://" + o.HttpAddress
+	} else {
+		o.listen = o.Listen
 	}
 
 	return nil
