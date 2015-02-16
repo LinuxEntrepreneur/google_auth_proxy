@@ -107,6 +107,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("FATAL: listen (%s, %s) failed - %s", networkType, listenAddr, err)
 	}
+	defer listener.Close()
 	log.Printf("listening on %s", listenAddr)
 
 	server := &http.Server{Handler: oauthproxy}
